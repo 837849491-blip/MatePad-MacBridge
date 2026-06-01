@@ -1,0 +1,9 @@
+MatePad MacBridge includes integration notes and patches for SideScreen.
+
+SideScreen is licensed under the MIT License.
+Copyright (c) 2025 Side Screen
+Source: https://github.com/tranvuongquocdat/SideScreen
+
+This repository does not claim ownership of SideScreen. The files in patches/
+describe local changes applied to SideScreen v0.9.1 for MatePad touch and
+Doubao voice integration.

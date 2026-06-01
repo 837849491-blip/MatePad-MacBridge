@@ -1,0 +1,25 @@
+--- a/AndroidClient/app/src/main/res/layout/activity_main.xml	2026-05-18 12:39:12
++++ b/AndroidClient/app/src/main/res/layout/activity_main.xml	2026-06-01 19:56:39
+@@ -146,6 +146,22 @@
+             android:src="@drawable/ic_settings"
+             android:tint="#FFFFFF" />
+     </androidx.cardview.widget.CardView>
++
++    <!-- Doubao Voice Button -->
++    <com.google.android.material.button.MaterialButton
++        android:id="@+id/doubaoVoiceButton"
++        android:layout_width="150dp"
++        android:layout_height="56dp"
++        android:layout_margin="24dp"
++        android:text="豆包语音"
++        android:textColor="#FFFFFF"
++        android:textSize="16sp"
++        android:textStyle="bold"
++        android:visibility="gone"
++        app:backgroundTint="#1976FF"
++        app:cornerRadius="28dp"
++        app:layout_constraintBottom_toBottomOf="parent"
++        app:layout_constraintStart_toStartOf="parent" />
+ 
+     <!-- Modern Connection Panel -->
+     <androidx.cardview.widget.CardView

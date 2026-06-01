@@ -1,0 +1,10 @@
+.DS_Store
+*.o
+*.log
+*.dmg
+*.apk
+build/
+dist/
+MatePadControl.app/
+SideScreen-*/
+SideScreen-src.zip

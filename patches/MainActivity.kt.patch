@@ -1,0 +1,133 @@
+--- a/AndroidClient/app/src/main/java/com/sidescreen/app/MainActivity.kt	2026-05-18 12:39:12
++++ b/AndroidClient/app/src/main/java/com/sidescreen/app/MainActivity.kt	2026-06-01 20:41:39
+@@ -14,6 +14,7 @@
+ import android.os.Handler
+ import android.os.Looper
+ import android.os.PowerManager
++import android.os.SystemClock
+ import android.provider.Settings
+ import android.view.MotionEvent
+ import android.view.SurfaceHolder
+@@ -35,6 +36,7 @@
+ import kotlinx.coroutines.launch
+ import java.net.InetSocketAddress
+ import java.net.Socket
++import java.net.URL
+ 
+ private fun mainDiag(msg: String) = DiagLog.log("MA", msg)
+ 
+@@ -60,6 +62,7 @@
+ 
+     // Input prediction for low-latency gaming
+     private val inputPredictor = InputPredictor()
++    private var lastDirectTouchMs = 0L
+ 
+     // Checklist status handler
+     private val checklistHandler = Handler(Looper.getMainLooper())
+@@ -97,11 +100,42 @@
+         setupUI()
+         setupDraggableOverlay()
+         setupSettingsButton()
++        setupDoubaoVoiceButton()
+         restoreOverlayPosition()
+         restoreSettingsButtonPosition()
+         startChecklistUpdates()
+         setupModeToggle()
+         setupWirelessController()
++    }
++
++    private fun setupDoubaoVoiceButton() {
++        binding.doubaoVoiceButton.setOnClickListener {
++            lifecycleScope.launch(Dispatchers.IO) {
++                try {
++                    URL("http://127.0.0.1:18765/voice").openStream().use { }
++                    runOnUiThread { updateStatus("Doubao voice triggered") }
++                } catch (e: Exception) {
++                    runOnUiThread { updateStatus("Doubao voice unavailable: ${e.message}") }
++                }
++            }
++        }
++    }
++
++    private fun sendMacDirectTouch(
++        x: Float,
++        y: Float,
++        type: Int,
++    ) {
++        val now = SystemClock.uptimeMillis()
++        if (type == 1 && now - lastDirectTouchMs < 16L) return
++        lastDirectTouchMs = now
++        lifecycleScope.launch(Dispatchers.IO) {
++            try {
++                URL("http://127.0.0.1:18765/touch?x=$x&y=$y&type=$type").openStream().use { }
++            } catch (_: Exception) {
++                // Native SideScreen touch remains active if the local control bridge is unavailable.
++            }
++        }
+     }
+ 
+     private fun setupModeToggle() {
+@@ -843,6 +877,7 @@
+                     enableFullscreenMode()
+                     binding.settingsPanel.visibility = View.GONE
+                     binding.settingsButton.visibility = View.VISIBLE
++                    binding.doubaoVoiceButton.visibility = View.VISIBLE
+                     restoreSettingsButtonPosition()
+                     updateOverlayVisibility(prefs.showStatsOverlay)
+                     // For wireless mode, transition controller to CONNECTED here —
+@@ -862,6 +897,7 @@
+                     resetOrientationToSensor()
+                     binding.settingsPanel.visibility = View.VISIBLE
+                     binding.settingsButton.visibility = View.GONE
++                    binding.doubaoVoiceButton.visibility = View.GONE
+                     binding.statusBar.visibility = View.GONE
+                     val mode = prefs.connectionMode
+                     val willTransition = mode == ConnectionMode.WIRELESS
+@@ -1015,6 +1051,7 @@
+ 
+                             binding.settingsPanel.visibility = View.GONE
+                             binding.settingsButton.visibility = View.VISIBLE
++                            binding.doubaoVoiceButton.visibility = View.VISIBLE
+                             restoreSettingsButtonPosition()
+                             updateOverlayVisibility(prefs.showStatsOverlay)
+                         } else {
+@@ -1029,6 +1066,7 @@
+ 
+                             binding.settingsPanel.visibility = View.VISIBLE
+                             binding.settingsButton.visibility = View.GONE
++                            binding.doubaoVoiceButton.visibility = View.GONE
+                             binding.statusBar.visibility = View.GONE
+ 
+                             // Restart checklist updates immediately
+@@ -1172,6 +1210,7 @@
+             MotionEvent.ACTION_DOWN -> {
+                 inputPredictor.reset()
+                 inputPredictor.addSample(x, y)
++                sendMacDirectTouch(x, y, 0)
+                 streamClient?.sendTouch(x, y, 0, pointerCount, x2, y2)
+             }
+ 
+@@ -1183,6 +1222,7 @@
+                 if (pointerCount == 1) {
+                     inputPredictor.addSample(x, y)
+                     val (px, py) = inputPredictor.predictPosition(12f)
++                    sendMacDirectTouch(px, py, 1)
+                     streamClient?.sendTouch(px, py, 1, 1)
+                 } else {
+                     streamClient?.sendTouch(x, y, 1, pointerCount, x2, y2)
+@@ -1191,6 +1231,7 @@
+ 
+             MotionEvent.ACTION_UP -> {
+                 inputPredictor.reset()
++                sendMacDirectTouch(x, y, 2)
+                 streamClient?.sendTouch(x, y, 2, 1)
+             }
+ 
+@@ -1200,6 +1241,7 @@
+ 
+             MotionEvent.ACTION_CANCEL -> {
+                 inputPredictor.reset()
++                sendMacDirectTouch(x, y, 2)
+                 streamClient?.sendTouch(x, y, 2, 1)
+             }
+         }
