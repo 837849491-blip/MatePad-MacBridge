@@ -3,11 +3,23 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 CONTROL_APP="/Applications/MatePadControl.app"
+SIDESCREEN_APP="/Applications/SideScreen.app"
 CONTROL_PORT=18765
 SIDESCREEN_PORT=54321
 
 if ! command -v adb >/dev/null 2>&1; then
   echo "adb not found. Install with: brew install android-platform-tools"
+  exit 1
+fi
+
+if [[ ! -d "$CONTROL_APP" ]]; then
+  echo "MatePadControl is not installed. Run: ~/.matepad-macbridge/MatePad-MacBridge/install.sh"
+  exit 1
+fi
+
+if [[ ! -d "$SIDESCREEN_APP" ]]; then
+  echo "SideScreen Mac Host not found at $SIDESCREEN_APP"
+  echo "Install it from: https://github.com/tranvuongquocdat/SideScreen/releases"
   exit 1
 fi
 
@@ -23,7 +35,7 @@ fi
 adb reverse tcp:$SIDESCREEN_PORT tcp:$SIDESCREEN_PORT >/dev/null
 adb reverse tcp:$CONTROL_PORT tcp:$CONTROL_PORT >/dev/null
 
-open /Applications/SideScreen.app
+open "$SIDESCREEN_APP"
 adb shell monkey -p com.sidescreen.app -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 
 echo "MatePad workspace ready."

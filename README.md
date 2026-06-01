@@ -1,120 +1,131 @@
 # MatePad MacBridge
 
-把华为 MatePad 通过 USB Debug 变成 Mac 的免费副屏，并补上触控控制和豆包语音入口。
+一条命令，把华为 MatePad + MacBook 配成免费的 USB 副屏，并补上触控和豆包语音入口。
 
-这个项目是在免费开源的 [SideScreen](https://github.com/tranvuongquocdat/SideScreen) 基础上做的桥接方案：
+## 一键安装
 
-- SideScreen 负责把 Mac 桌面串流到 MatePad。
-- `MatePadControl` 负责把 MatePad 上的触摸映射成 Mac 鼠标事件。
-- MatePad 端 SideScreen 增加一个“豆包语音”按钮，用 USB reverse 调用 Mac 上的豆包输入法语音快捷键。
-
-## 功能
-
-- USB 有线副屏，实测 1920x1200、约 37-39 FPS、RTT 约 3ms。
-- MatePad 屏幕触摸可直接控制 Mac 副屏坐标。
-- MatePad 左下角“豆包语音”按钮可触发 Mac 上豆包输入法的语音输入。
-- Mac 控制桥以 `/Applications/MatePadControl.app` 运行，并通过 LaunchAgent 开机自启。
-- 所有通信只走本机和 ADB reverse：`127.0.0.1:18765`、`tcp:54321`。
-
-## 仓库结构
-
-```text
-src/matepad_control.c                         Mac 控制桥服务
-macos/Info.plist                              MatePadControl.app 信息模板
-launchd/com.ai-book.matepad-control.plist     LaunchAgent 示例
-scripts/start-matepad-workspace.sh            一键恢复 USB reverse 和 SideScreen
-scripts/install-mac-bridge.sh                 构建并安装 Mac 控制桥
-patches/*.patch                               SideScreen Android 客户端补丁
-docs/PROJECT_SUMMARY.md                       项目总结和验证记录
-```
-
-## 安装思路
-
-1. 在 Mac 上安装 SideScreen。
-2. 在 MatePad 上安装打过补丁的 SideScreen Android 客户端。
-3. 在 Mac 上构建并安装 `MatePadControl.app`。
-4. 在 macOS 设置里给 `MatePadControl` 和 `SideScreen` 开启“辅助功能”权限。
-5. 通过 ADB 建立端口映射：
+在 Mac 的终端里执行：
 
 ```bash
-adb reverse tcp:54321 tcp:54321
-adb reverse tcp:18765 tcp:18765
+curl -fsSL https://raw.githubusercontent.com/837849491-blip/MatePad-MacBridge/main/install.sh | bash
 ```
 
-## Mac 控制桥
+安装器会自动完成：
 
-构建并安装：
+- 下载并保存本项目到 `~/.matepad-macbridge/MatePad-MacBridge`
+- 构建并安装 Mac 端触控桥 `MatePadControl.app`
+- 安装或检查 `adb`
+- 创建日常启动命令 `~/.matepad-macbridge/bin/matepad-macbridge-start`
+- 打开 macOS 辅助功能权限设置页
+- 在 MatePad 已连接并授权时，自动建立 USB 端口映射并启动 SideScreen
+
+日常断线、重启或重新插线后，执行：
 
 ```bash
-./scripts/install-mac-bridge.sh
+~/.matepad-macbridge/bin/matepad-macbridge-start
 ```
 
-检查服务：
+## 必须手动确认的两件事
+
+这些权限 macOS / Android 不允许脚本替你点，必须本人确认：
+
+- macOS 辅助功能权限：在 `系统设置 > 隐私与安全性 > 辅助功能` 中启用 `MatePadControl` 和 `SideScreen`
+- MatePad USB 调试：MatePad 插上 Mac 后，解锁平板并允许 USB 调试授权
+
+## MatePad 端 APK
+
+默认安装命令不会强行编译 Android APK，因为这依赖 Android SDK、JDK、Gradle 和当前机器环境，普通用户第一次跑很容易卡住。
+
+如果你已经准备好 Android 构建环境，可以尝试自动编译并安装打补丁的 SideScreen MatePad 客户端：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/837849491-blip/MatePad-MacBridge/main/install.sh | bash -s -- --with-android-build
+```
+
+如果遇到签名不一致，先卸载旧的 SideScreen Android 客户端，再重新安装生成的 APK：
+
+```bash
+adb uninstall com.sidescreen.app
+adb install ~/.matepad-macbridge/build/SideScreen-0.9.1/AndroidClient/app/build/outputs/apk/debug/app-debug.apk
+```
+
+## 你需要准备什么
+
+- 一台 MacBook
+- 一台支持 USB 调试的华为 MatePad
+- 一根稳定的数据线
+- SideScreen Mac Host，放在 `/Applications/SideScreen.app`
+- 豆包输入法，并把语音快捷键配置为双击右 Option
+
+如果你的 Mac 没有 `adb`，安装器会在检测到 Homebrew 时自动执行：
+
+```bash
+brew install android-platform-tools
+```
+
+如果没有 Homebrew，请先安装 Homebrew 或自行安装 Android platform tools。
+
+## 怎么验证成功
+
+安装完成后检查 Mac 端触控桥：
 
 ```bash
 curl http://127.0.0.1:18765/health
 ```
 
-期望看到：
+理想输出类似：
 
 ```json
 {"ok":true,"axTrusted":true,"port":18765}
 ```
 
-常用接口：
+如果 `axTrusted` 是 `false`，说明还没有给 `MatePadControl` 开启 macOS 辅助功能权限。
 
-- `GET /health`：状态检查
-- `GET /touch?x=0.5&y=0.5&type=1`：把触摸映射到副屏坐标
-- `GET /voice`：双击右 Option，触发豆包输入法语音
-- `GET /move?dx=80&dy=30`：触控板式相对移动
-- `GET /click`：左键点击
-- `GET /rightclick`：右键点击
+## 这个项目做了什么
 
-## SideScreen Android 补丁
+本项目基于开源项目 [SideScreen](https://github.com/tranvuongquocdat/SideScreen) 做桥接增强：
 
-补丁位于 `patches/`：
+- SideScreen 负责把 Mac 桌面通过 USB 串流到 MatePad
+- `MatePadControl` 把 MatePad 上的触摸事件映射为 Mac 鼠标事件
+- MatePad 端补丁增加“豆包语音”按钮，通过 USB reverse 调用 Mac 上的豆包语音快捷键
+- 所有通信只走本机和 ADB reverse：`127.0.0.1:18765`、`tcp:54321`
 
-- `activity_main.xml.patch`：增加“豆包语音”按钮。
-- `MainActivity.kt.patch`：连接后显示按钮；触摸 SurfaceView 时同步调用 Mac 控制桥 `/touch`；点击按钮时调用 `/voice`。
+## 仓库结构
 
-基于 SideScreen `v0.9.1`：
-
-```bash
-curl -L -o SideScreen-src.zip https://github.com/tranvuongquocdat/SideScreen/archive/refs/tags/0.9.1.zip
-unzip SideScreen-src.zip
-cd SideScreen-0.9.1
-patch -p1 < /path/to/patches/activity_main.xml.patch
-patch -p1 < /path/to/patches/MainActivity.kt.patch
-cd AndroidClient
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+```text
+install.sh                                   面向普通用户的一键安装入口
+src/matepad_control.c                        Mac 控制桥服务
+macos/Info.plist                             MatePadControl.app 信息模板
+launchd/com.ai-book.matepad-control.plist    LaunchAgent 配置
+scripts/install-mac-bridge.sh                构建并安装 Mac 控制桥
+scripts/start-matepad-workspace.sh           恢复 ADB reverse 并启动工作区
+patches/*.patch                              SideScreen Android 客户端补丁
+docs/PROJECT_SUMMARY.md                      项目总结和验证记录
+tests/smoke.sh                               安装入口冒烟测试
 ```
 
-如果遇到签名不一致：
+## 常用命令
 
 ```bash
-adb uninstall com.sidescreen.app
-adb install app/build/outputs/apk/debug/app-debug.apk
+# 查看安装器会做什么，不改系统
+./install.sh --dry-run
+
+# 只安装，不自动启动
+./install.sh --no-start
+
+# 日常启动
+~/.matepad-macbridge/bin/matepad-macbridge-start
+
+# 检查触控桥状态
+curl http://127.0.0.1:18765/health
 ```
 
-## 一键恢复
+## 已知限制
 
-日常断线后运行：
-
-```bash
-./scripts/start-matepad-workspace.sh
-```
-
-然后在 MatePad 的 SideScreen 里点 `CONNECT`。
-
-## 依赖
-
-- macOS
-- Huawei MatePad，开启 USB Debug
-- `adb`
-- `clang`
-- SideScreen Mac Host
-- 豆包输入法，且语音快捷键配置为双击右 Option
+- macOS 辅助功能权限必须手动开启，这是系统安全限制
+- MatePad USB 调试授权必须手动确认，这是 Android 安全限制
+- SideScreen Mac Host 仍需要你安装到 `/Applications/SideScreen.app`
+- Android APK 自动构建依赖本机 Android 构建环境，失败时可以按 README 的手动命令排查
 
 ## 授权与归属
 
